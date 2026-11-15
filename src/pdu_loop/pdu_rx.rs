@@ -112,10 +112,23 @@ impl<'sto> PduRx<'sto> {
             pdu_idx
         );
 
-        let mut frame = self
-            .storage
-            .claim_receiving(frame_index)
-            .ok_or(PduError::InvalidIndex(frame_index))?;
+        // NOTE (zaubererty fork): A frame can fail the claim when its reply arrives
+        // after a (spurious) timeout cleaned the slot, when a duplicate reply arrives,
+        // or when the reply wins the race against the `Sent` marking. A stray frame is
+        // not fatal: drop it and let the command layer retry, instead of killing the
+        // TX/RX task (see ethercrab#293 / qitechgmbh/control#500).
+        let mut frame = match self.storage.claim_receiving(frame_index) {
+            Some(frame) => frame,
+            None => {
+                fmt::warn!(
+                    "Ignoring frame index {} (PDU {:#04x}): slot not in receiving state",
+                    frame_index,
+                    pdu_idx
+                );
+
+                return Ok(ReceiveAction::Ignored);
+            }
+        };
 
         let frame_data = frame.buf_mut();
 

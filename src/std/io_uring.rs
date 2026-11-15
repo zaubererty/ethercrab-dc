@@ -204,7 +204,11 @@ pub fn tx_rx_task_io_uring<'sto>(
                     key,
                 );
 
-                pdu_rx.receive_frame(&frame).map_err(io::Error::other)?;
+                // NOTE (zaubererty fork): see unix/mod.rs — stray/duplicate frames are
+                // logged but must not abort the task.
+                if let Err(e) = pdu_rx.receive_frame(&frame) {
+                    fmt::error!("Failed to receive frame (ignored): {}", e);
+                }
 
                 fmt::trace!("Received frame in {} ns", received.elapsed().as_nanos());
             }

@@ -99,9 +99,10 @@ impl<'a> Future for TxRxFut<'a> {
 
                 if let Err(e) = unsafe { self.rx.as_mut().unwrap_unchecked() }.receive_frame(packet)
                 {
-                    fmt::error!("Failed to receive frame: {}", e);
-
-                    return Poll::Ready(Err(Error::ReceiveFrame));
+                    // NOTE (zaubererty fork): A malformed/stray frame (e.g. leftover or
+                    // duplicated replies on slow links/USB NICs) must not kill the loop.
+                    // Log it and keep polling; the command layer will time out and retry.
+                    fmt::error!("Failed to receive frame (ignored): {}", e);
                 }
             }
             Poll::Ready(Err(e)) => {
